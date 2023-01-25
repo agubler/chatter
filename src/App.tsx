@@ -22,7 +22,7 @@ import DialogContent from '@mui/material/DialogContent';
 import DialogActions from '@mui/material/DialogActions';
 import DialogContentText from '@mui/material/DialogContentText';
 
-import { ListChildComponentProps, FixedSizeList } from 'react-window';
+import { ListChildComponentProps, FixedSizeList, VariableSizeList } from 'react-window';
 import AutoSizer from 'react-virtualized-auto-sizer';
 import { customAlphabet } from 'nanoid/non-secure';
 import { useSearchParams, useNavigate } from 'react-router-dom';
@@ -34,12 +34,17 @@ import {
 	RealtimeChannel,
 	createClient
 } from '@supabase/supabase-js';
+import { Container } from '@mui/system';
+import CircularProgress from '@mui/material/CircularProgress';
 
 const createChatCode = customAlphabet('ABCDEFGHIJKLMNOP123456789', 6);
 
-const apiUrl = 'http://127.0.0.1:54321';
-const anonKey =
-	'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
+const isProd = import.meta.env.PROD;
+
+const apiUrl = isProd ? 'https://aqlienrbcswymuytywsy.supabase.co' : 'http://127.0.0.1:54321';
+const anonKey = isProd
+	? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFxbGllbnJiY3N3eW11eXR5d3N5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE2NzQ2MDEzOTksImV4cCI6MTk5MDE3NzM5OX0.54Ee2ILgguLNjf7PcamZLOZQjytVV_2jmdGzFpxQ8II'
+	: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0';
 
 const client = createClient(apiUrl, anonKey, {
 	realtime: { params: { eventsPerSecond: 20000 } }
@@ -71,9 +76,8 @@ const DrawerHeader = styled('div')(({ theme }) => ({
 	display: 'flex',
 	alignItems: 'center',
 	padding: theme.spacing(0, 1),
-	// necessary for content to be below app bar
-	...theme.mixins.toolbar,
-	justifyContent: 'space-between'
+	justifyContent: 'space-between',
+	...theme.mixins.toolbar
 }));
 
 function User({ name }: { name: string }) {
@@ -84,7 +88,7 @@ function User({ name }: { name: string }) {
 	);
 }
 
-function MessageInput({ onMessage }: { onMessage: any }) {
+function MessageInput({ onMessage, focus }: { onMessage: any; focus: boolean }) {
 	const [input, setInput] = React.useState('');
 	return (
 		<Paper
@@ -103,6 +107,7 @@ function MessageInput({ onMessage }: { onMessage: any }) {
 				multiline
 				maxRows={10}
 				value={input}
+				autoFocus={focus}
 				onChange={(value) => {
 					setInput(value.target.value);
 				}}
@@ -135,9 +140,41 @@ function MessageInput({ onMessage }: { onMessage: any }) {
 
 function Row(props: ListChildComponentProps) {
 	const { index, style, data } = props;
-	const { message, username } = data[index];
+	const message = data[index];
+	if (isChatMessage(message)) {
+		return (
+			<ListItem
+				id={message.id}
+				style={style}
+				key={message.id}
+				component="div"
+				disablePadding
+			>
+				<ListItemText
+					sx={{ paddingLeft: '12px' }}
+					primary={
+						<>
+							<Typography
+								component="span"
+								fontWeight="bold"
+							>{`${message.username}: `}</Typography>
+							<Typography component="span">
+								{message.message}
+							</Typography>
+						</>
+					}
+				/>
+			</ListItem>
+		);
+	}
 	return (
-		<ListItem style={style} key={index} component="div" disablePadding>
+		<ListItem
+			id={message.id}
+			style={style}
+			key={message.id}
+			component="div"
+			disablePadding
+		>
 			<ListItemText
 				sx={{ paddingLeft: '12px' }}
 				primary={
@@ -145,8 +182,14 @@ function Row(props: ListChildComponentProps) {
 						<Typography
 							component="span"
 							fontWeight="bold"
-						>{`${username}: `}</Typography>
-						<Typography component="span">{message}</Typography>
+							fontStyle="italic"
+							fontSize="12px"
+							color="lightgray"
+						>{`${message.username} ${
+							message.action === 'join'
+								? 'joined'
+								: 'left'
+						} the room`}</Typography>
 					</>
 				}
 			/>
@@ -154,14 +197,31 @@ function Row(props: ListChildComponentProps) {
 	);
 }
 
+interface ChatMessage {
+	id: string;
+	message: string;
+	username: string;
+}
+
+interface PresenceMessage {
+	id: string;
+	action: 'join' | 'leave';
+	username: string;
+}
+
+type Message = ChatMessage | PresenceMessage;
+
+function isChatMessage(value: any): value is ChatMessage {
+	return !!value.message;
+}
+
 function App() {
-	// const theme = useTheme();
 	const [channel, setChannel] = React.useState<RealtimeChannel>();
-	const [messages, setMessages] = React.useState<{ message: string; username: string }[]>([]);
+	const [messages, setMessages] = React.useState<Message[]>([]);
 	const [usernameInput, setUsernameInput] = React.useState('');
 	const [users, setUsers] = React.useState<string[]>([]);
 	const [searchParams] = useSearchParams();
-	const [roomCode] = React.useState(searchParams.get('room'));
+	const roomCode = searchParams.get('room');
 	const listRef = React.useRef<any>();
 	const [username, setUsername] = useLocalStorageState<string>(`${roomCode}-chat-username`);
 	const nav = useNavigate();
@@ -188,13 +248,40 @@ function App() {
 				REALTIME_LISTEN_TYPES.PRESENCE,
 				{ event: REALTIME_PRESENCE_LISTEN_EVENTS.SYNC },
 				() => {
-					console.log('Online users: ', channel.presenceState());
-					setUsers(Object.keys(channel.presenceState()));
+					setUsers(Object.keys(channel.presenceState()).sort());
+				}
+			);
+			channel.on(
+				REALTIME_LISTEN_TYPES.PRESENCE,
+				{ event: REALTIME_PRESENCE_LISTEN_EVENTS.JOIN },
+				({ newPresences }) => {
+					const presenceMsg = newPresences.map(({ username }) => {
+						return {
+							action: 'join' as const,
+							username,
+							id: createChatCode()
+						};
+					});
+					setMessages((messages) => [...messages, ...presenceMsg]);
+				}
+			);
+			channel.on(
+				REALTIME_LISTEN_TYPES.PRESENCE,
+				{ event: REALTIME_PRESENCE_LISTEN_EVENTS.LEAVE },
+				({ leftPresences }) => {
+					const presenceMsg = leftPresences.map(({ username }) => {
+						return {
+							action: 'leave' as const,
+							username,
+							id: createChatCode()
+						};
+					});
+					setMessages((messages) => [...messages, ...presenceMsg]);
 				}
 			);
 			channel.subscribe(async (status) => {
 				if (status === REALTIME_SUBSCRIBE_STATES.SUBSCRIBED) {
-					channel.track({});
+					channel.track({ username });
 				}
 			});
 			channel.on(
@@ -213,11 +300,36 @@ function App() {
 	}, [roomCode, username]);
 
 	React.useEffect(() => {
+		function handleResize() {
+			listRef.current?.resetAfterIndex(0, true);
+		}
+
+		window.addEventListener('resize', handleResize);
+		return () => {
+			window.removeEventListener('resize', handleResize);
+		};
+	});
+
+	React.useEffect(() => {
 		listRef.current?.scrollToItem(messages.length);
 	}, [messages.length]);
 
 	if (!roomCode) {
-		return null;
+		return (
+			<>
+				<CssBaseline />
+				<Container
+					sx={{
+						height: '100vh',
+						justifyContent: 'center',
+						display: 'flex',
+						alignItems: 'center'
+					}}
+				>
+					<CircularProgress />
+				</Container>
+			</>
+		);
 	}
 
 	return (
@@ -240,6 +352,13 @@ function App() {
 						value={usernameInput}
 						onChange={(event) => {
 							setUsernameInput(event.target.value);
+						}}
+						onKeyDown={(event) => {
+							if (event.key === 'Enter') {
+								if (usernameInput) {
+									setUsername(usernameInput);
+								}
+							}
 						}}
 					/>
 				</DialogContent>
@@ -290,14 +409,39 @@ function App() {
 					<AutoSizer>
 						{({ height, width }) => {
 							return (
-								<FixedSizeList
+								<VariableSizeList
 									ref={listRef}
-									height={Math.min(
-										height,
-										32 * messages.length
-									)}
+									height={height}
 									width={width}
-									itemSize={32}
+									itemSize={(index) => {
+										const message =
+											messages[
+												index
+											];
+										if (
+											isChatMessage(
+												message
+											)
+										) {
+											// there must be a better way to get the real height of message
+											const rows =
+												Math.ceil(
+													(message
+														.message
+														.length +
+														message
+															.username
+															.length) /
+														(width /
+															8)
+												);
+											return (
+												32 *
+												rows
+											);
+										}
+										return 24;
+									}}
 									itemCount={messages.length}
 									itemData={messages}
 									initialScrollOffset={
@@ -305,20 +449,22 @@ function App() {
 									}
 								>
 									{Row}
-								</FixedSizeList>
+								</VariableSizeList>
 							);
 						}}
 					</AutoSizer>
 				</div>
 				<div>
 					<MessageInput
+						focus={!!username}
 						onMessage={(message: string) => {
 							channel?.send({
 								type: 'broadcast',
 								event: 'message',
 								payload: {
 									message,
-									username
+									username,
+									id: createChatCode()
 								}
 							});
 						}}
