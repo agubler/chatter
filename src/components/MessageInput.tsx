@@ -26,7 +26,6 @@ export default function MessageInput({ onMessage }: MessageInputProps) {
 				placeholder="Chat here"
 				multiline
 				maxRows={10}
-				rows={1}
 				value={value}
 				autoFocus
 				onChange={(value) => {
