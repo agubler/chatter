@@ -75,33 +75,36 @@ function App() {
 		/** only create the channel if we have a roomCode and username */
 		if (roomCode && username) {
 			/**
-			 * Step 1:
-			 *
-			 * Add the presence configuration to use the username as the key
-			 * for presence state.
+			 * Create the supabase channel for the roomCode, configured
+			 * so the channel receives its own messages
 			 */
 			const channel = supabase.channel(`room:${roomCode}`, {
 				config: {
 					broadcast: {
 						self: true
-					},
-					presence: {
-						key: username
 					}
 				}
 			});
 
 			/**
-			 * Step 2:
+			 * Step 1:
 			 *
 			 * Listen to the "presence" synchronization event to set the online users,
 			 * this is updated whenever presence state changes.
 			 */
 			channel.on('presence', { event: 'sync' }, () => {
-				/** Get the presence state from the channel, keyed by the username */
-				const users = channel.presenceState();
+				/** Get the presence state from the channel, keyed by realtime identifier */
+				const presenceState = channel.presenceState();
+
+				/** transform the presence */
+				const users = Object.keys(presenceState)
+					.map((presenceId) => {
+						const presences = presenceState[presenceId] as unknown as { username: string }[];
+						return presences.map((presence) => presence.username);
+					})
+					.flat();
 				/** sort and set the users */
-				setUsers(Object.keys(users).sort());
+				setUsers(users.sort());
 			});
 
 			/**
@@ -112,7 +115,7 @@ function App() {
 			});
 
 			/**
-			 * Step 3:
+			 * Step 2:
 			 *
 			 * Track channel for username when the channel has successfully been
 			 * subscribed to. This updates the managed presence state in the supabase
