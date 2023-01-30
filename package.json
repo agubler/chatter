@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "prettier": "prettier --write \"src/**/*.{ts,tsx,css,html}\"",
-    "start:backend": "supabase stop && supabase start"
+    "start:supabase": "supabase stop && supabase start"
   },
   "dependencies": {
     "@emotion/react": "^11.10.5",
