@@ -77,8 +77,8 @@ function App() {
 			/**
 			 * Step 1:
 			 *
-			 * create the supabase channel for the roomCode, configured
-			 * so the channel receives it's own messages
+			 * Create the supabase channel for the roomCode, configured
+			 * so the channel receives its own messages
 			 */
 			const channel = supabase.channel(`room:${roomCode}`, {
 				config: {
@@ -91,7 +91,7 @@ function App() {
 			/**
 			 * Step 2:
 			 *
-			 * Listen to broadcast message with a `message` event
+			 * Listen to broadcast messages with a `message` event
 			 */
 			channel.on('broadcast', { event: 'message' }, ({ payload }) => {
 				setMessages((messages) => [...messages, payload]);
@@ -107,14 +107,14 @@ function App() {
 			/**
 			 * Step 4:
 			 *
-			 * Set the channel in state
+			 * Set the channel in the state
 			 */
 			setChannel(channel);
 
 			/**
 			 * * Step 5:
 			 *
-			 * Return a clean up function that unsubscribes from the channel
+			 * Return a clean-up function that unsubscribes from the channel
 			 * and clears the channel state
 			 */
 			return () => {
