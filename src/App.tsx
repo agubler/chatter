@@ -87,8 +87,6 @@ function App() {
 			});
 
 			/**
-			 * Step 1:
-			 *
 			 * Listen to the "presence" synchronization event to set the online users,
 			 * this is updated whenever presence state changes.
 			 */
@@ -108,6 +106,40 @@ function App() {
 			});
 
 			/**
+			 * Step 1:
+			 *
+			 * Listen to presence event for users joining the chat room
+			 */
+			channel.on('presence', { event: 'join' }, ({ newPresences }) => {
+				const presenceMsg = newPresences.map(({ username }) => {
+					return {
+						id: createIdentifier(),
+						type: 'presence' as const,
+						username,
+						message: 'joined' as const
+					};
+				});
+				setMessages((messages) => [...messages, ...presenceMsg]);
+			});
+
+			/**
+			 * Step 2:
+			 *
+			 * Listen to presence event for users leaving the chat room
+			 */
+			channel.on('presence', { event: 'leave' }, ({ leftPresences }) => {
+				const presenceMsg = leftPresences.map(({ username }) => {
+					return {
+						id: createIdentifier(),
+						type: 'presence' as const,
+						username,
+						message: 'left' as const
+					};
+				});
+				setMessages((messages) => [...messages, ...presenceMsg]);
+			});
+
+			/**
 			 * Listen to broadcast message with a `message` event
 			 */
 			channel.on('broadcast', { event: 'message' }, ({ payload }) => {
@@ -115,8 +147,6 @@ function App() {
 			});
 
 			/**
-			 * Step 2:
-			 *
 			 * Track channel for username when the channel has successfully been
 			 * subscribed to. This updates the managed presence state in the supabase
 			 * realtime services and passes the username.
