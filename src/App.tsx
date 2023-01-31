@@ -16,11 +16,16 @@ import ChatWindow, { Message } from './components/ChatWindow';
 import MessageInput from './components/MessageInput';
 import UserList from './components/UserList';
 
+import { createClient, RealtimeChannel } from '@supabase/supabase-js';
+
 const createIdentifier = customAlphabet('ABCDEFGHIJKLMNOP123456789', 6);
 
 const drawerWidth = 240;
 
 const isDevelopment = import.meta.env.DEV;
+
+/** create the supabase client using the env variables */
+const supabase = createClient(import.meta.env.VITE_SUPABASE_URL, import.meta.env.VITE_SUPABASE_ANON_KEY);
 
 const Main = styled('main')(({ theme }) => ({
 	position: 'relative',
@@ -47,6 +52,7 @@ function App() {
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [username, setUsername] = useState<string>(isDevelopment ? `Test User ${createIdentifier()}` : '');
 	const [users, setUsers] = useState<string[]>([]);
+	const [channel, setChannel] = useState<RealtimeChannel>();
 	const [searchParams] = useSearchParams();
 	const roomCode = searchParams.get('room');
 	const chatWindowRef = useRef<VariableSizeList<Message[]>>(null);
@@ -63,6 +69,60 @@ function App() {
 	useEffect(() => {
 		chatWindowRef.current?.scrollToItem(messages.length, 'end');
 	}, [messages.length]);
+
+	/** Setup supabase realtime chat channel and subscription */
+	useEffect(() => {
+		/** only create the channel if we have a roomCode and username */
+		if (roomCode && username) {
+			/**
+			 * Step 1:
+			 *
+			 * create the supabase channel for the roomCode, configured
+			 * so the channel receives it's own messages
+			 */
+			const channel = supabase.channel(`room:${roomCode}`, {
+				config: {
+					broadcast: {
+						self: true
+					}
+				}
+			});
+
+			/**
+			 * Step 2:
+			 *
+			 * Listen to broadcast message with a `message` event
+			 */
+			channel.on('broadcast', { event: 'message' }, ({ payload }) => {
+				setMessages((messages) => [...messages, payload]);
+			});
+
+			/**
+			 * Step 3:
+			 *
+			 * Subscribe to the channel
+			 */
+			channel.subscribe();
+
+			/**
+			 * Step 4:
+			 *
+			 * Set the channel in state
+			 */
+			setChannel(channel);
+
+			/**
+			 * * Step 5:
+			 *
+			 * Return a clean up function that unsubscribes from the channel
+			 * and clears the channel state
+			 */
+			return () => {
+				channel.unsubscribe();
+				setChannel(undefined);
+			};
+		}
+	}, [roomCode, username]);
 
 	/** do not render anything without a room code */
 	if (!roomCode) {
@@ -124,16 +184,18 @@ function App() {
 				<ChatWindow messages={messages} ref={chatWindowRef} />
 				<MessageInput
 					onMessage={(message) => {
-						setMessages((messages) => {
-							return [
-								...messages,
-								{
-									message,
-									username,
-									id: createIdentifier(),
-									type: 'chat'
-								}
-							];
+						/**
+						 * Send the user message to the supabase channel
+						 */
+						channel?.send({
+							type: 'broadcast',
+							event: 'message',
+							payload: {
+								id: createIdentifier(),
+								message,
+								username,
+								type: 'chat'
+							}
 						});
 					}}
 				/>
