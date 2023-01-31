@@ -5,9 +5,11 @@ import CssBaseline from '@mui/material/CssBaseline';
 import MuiAppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
 import Typography from '@mui/material/Typography';
+import Snackbar from '@mui/material/Snackbar';
 import { VariableSizeList } from 'react-window';
 import { customAlphabet } from 'nanoid/non-secure';
 import { useSearchParams, useNavigate } from 'react-router-dom';
+import { CopyToClipboard } from 'react-copy-to-clipboard';
 
 import UsernameDialog from './components/UsernameDialog';
 import ChatWindow, { Message } from './components/ChatWindow';
@@ -41,6 +43,7 @@ const AppBar = styled(MuiAppBar)(({ theme }) => ({
 }));
 
 function App() {
+	const [roomCodeCopied, setRoomCodeCopied] = useState(false);
 	const [messages, setMessages] = useState<Message[]>([]);
 	const [username, setUsername] = useState<string>(isDevelopment ? `Test User ${createIdentifier()}` : '');
 	const [users, setUsers] = useState<string[]>([]);
@@ -74,11 +77,43 @@ function App() {
 	return (
 		<Box sx={{ display: 'flex', height: '100vh' }}>
 			<CssBaseline />
+			<Snackbar
+				anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+				open={roomCodeCopied}
+				autoHideDuration={2000}
+				onClose={() => {
+					setRoomCodeCopied(false);
+				}}
+				message="Chat Room Invite URL Copied"
+			/>
 			<AppBar position="fixed">
 				<Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
 					<Typography variant="h6" noWrap component="div">
 						Welcome to Chatter
 					</Typography>
+					<CopyToClipboard
+						text={window.location.href}
+						onCopy={() => {
+							setRoomCodeCopied(true);
+						}}
+					>
+						<Box
+							sx={{
+								display: 'flex',
+								flexDirection: 'column',
+								alignItems: 'center',
+								'&:hover': { color: 'lightgray' },
+								cursor: 'pointer'
+							}}
+						>
+							<Typography variant="h6" noWrap component="div">
+								Room Code: {roomCode}
+							</Typography>
+							<Typography noWrap component="div" variant="body2">
+								(click to copy invite url)
+							</Typography>
+						</Box>
+					</CopyToClipboard>
 					<Typography variant="h6" noWrap component="div">
 						{username}
 					</Typography>
